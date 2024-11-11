@@ -64,14 +64,25 @@ export const ChatRoom = () => {
     }
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp * 1000); // Convert Unix timestamp to milliseconds
-    return date.toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'Asia/Kolkata'
-    });
+  const formatTimestamp = (timestamp: number): string => {
+    try {
+      // Determine if the timestamp is in seconds or milliseconds
+      const isSeconds = timestamp < 1e12;
+
+      // Convert timestamp to milliseconds if it's in seconds
+      const date = isSeconds ? new Date(timestamp * 1000) : new Date(timestamp);
+
+      // Format the date in Indian Standard Time (IST)
+      return new Intl.DateTimeFormat('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+      }).format(date);
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return ''; // Return an empty string if formatting fails
+    }
   };
 
   return (
