@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useGameContext } from '../context/GameContext';
 import { messageResult } from '../lib/utils';
 import './ChatRoom.css';
@@ -6,15 +6,53 @@ import './ChatRoom.css';
 interface ChatMessage {
   playerId: string;
   playerName: string;
+  bazarName?: string;
   message: string;
   timestamp: number;
 }
 
+interface BackendChatMessage {
+  player_id: string;
+  player_name: string;
+  bazar_name?: string;
+  message: string;
+  timestamp: number;
+}
+
+const mapBackendMessage = (msg: BackendChatMessage): ChatMessage => {
+  return {
+    playerId: msg.player_id,
+    playerName: msg.player_name,
+    bazarName: msg.bazar_name,
+    message: msg.message,
+    timestamp: msg.timestamp
+  };
+};
+
+interface Player {
+  id: string;
+  name: string;
+  bazarName?: string;
+  isCreator: boolean;
+  isAlive: boolean;
+}
+
 export const ChatRoom = () => {
-  const { currentPlayer, gameState } = useGameContext();
+  const { currentPlayer, gameState, joinedPlayers } = useGameContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Create a mapping from playerId to playerName (including bazarName)
+  const playerMap = useMemo(() => {
+    const map = new Map<string, string>();
+    joinedPlayers.forEach(player => {
+      const displayName = player.bazarName || player.name;
+      map.set(player.id, displayName);
+      console.log(player.id, displayName);
+    });
+    return map;
+  }, [joinedPlayers]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -27,8 +65,12 @@ export const ChatRoom = () => {
         ]);
         
         if (Messages?.[0]?.Data) {
-          const parsedMessages = JSON.parse(Messages[0].Data);
+          const rawMessages: BackendChatMessage[] = JSON.parse(Messages[0].Data);
+          const parsedMessages: ChatMessage[] = rawMessages.map(mapBackendMessage);
+          console.log('Received messages:', parsedMessages);
+          console.log(parsedMessages[0].player_name);
           setMessages(parsedMessages);
+          scrollToBottom();
         }
       } catch (error) {
         console.error('Error fetching messages:', error);
@@ -36,6 +78,7 @@ export const ChatRoom = () => {
     };
 
     const interval = setInterval(fetchMessages, 2000);
+    fetchMessages(); // Initial fetch
     return () => clearInterval(interval);
   }, [gameState.gameProcess]);
 
@@ -53,12 +96,21 @@ export const ChatRoom = () => {
           value: newMessage,
         },
         {
+          name: 'PlayerId',
+          value: currentPlayer.id
+        },
+        {
           name: 'PlayerName',
-          value: currentPlayer.name
+          value: currentPlayer.name,
+        },
+        {
+          name: 'BazarName',
+          value: currentPlayer.bazarName || ''
         }
       ]);
 
       setNewMessage('');
+      scrollToBottom();
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -85,6 +137,10 @@ export const ChatRoom = () => {
     }
   };
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="chat-room">
       <div className="chat-messages">
@@ -94,7 +150,9 @@ export const ChatRoom = () => {
             className={`message ${msg.playerId === currentPlayer?.id ? 'own-message' : ''}`}
           >
             <div className="message-header">
-              <span className="player-name">{msg.playerName}</span>
+              <span className="player-name">
+                {msg.bazarName || playerMap.get(msg.playerId) || msg.playerName}
+              </span>
               <span className="message-time">{formatTimestamp(msg.timestamp)}</span>
             </div>
             <span className="message-content">{msg.message}</span>
